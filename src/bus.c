@@ -13,6 +13,7 @@
 #include "model3recomp/irq.h"
 #include "model3recomp/scsi.h"
 #include "model3recomp/pci.h"
+#include "model3recomp/io.h"
 #include "model3recomp/model3recomp.h"
 
 #include <stdio.h>
@@ -94,6 +95,7 @@ void bus_init(const m3_roms_t *roms)
     g_io_ready = 0;
     scsi_init();
     pci_init();
+    io_init();
 }
 
 void bus_shutdown(void)
@@ -360,27 +362,9 @@ static uint32_t dev_read_word(uint32_t w, int side_effects)
 
     if ((w & 0xFFFFFFC0u) == M3_INPUTS_BASE) {
         if ((w & 0x3Cu) == 0x00u)
-            return g_io_ctrl;        /* the strobe latch reads back */
-        if ((w & 0x3Cu) == 0x04u) {
-            /* ponytail: the I/O board's serial ready line is toggled rather
-             * than driven by a real protocol. The boot bit-bangs a byte to
-             * 0xF0040000 and then waits on bit 0x20000000 here -- first for it
-             * to clear, then for it to set:
-             *
-             *     li r4, 0x51 ; bl <bit-bang>
-             *     lwz r0, 0(r30)        ; r30 = 0xF0040004
-             *     andis. r9, r0, 0x2000
-             *     bne -0x14             ; wait for CLEAR
-             *     ... then the same loop waiting for SET
-             *
-             * A constant hangs one loop or the other. Toggling satisfies both
-             * and gets the boot past I/O init; the data the game reads back is
-             * not meaningful. Upgrade path: model the 315-5649 I/O board's
-             * serial protocol properly, which is also what buttons and coins
-             * need. */
-            g_io_ready ^= 0x20000000u;
-            return 0xFFFFFFFFu ^ g_io_ready;
-        }
+            return io_ctrl_read();
+        if ((w & 0x3Cu) == 0x04u)
+            return io_data_read();
         return 0xFFFFFFFFu;          /* inputs are active low: nothing pressed */
     }
 
@@ -398,7 +382,7 @@ static void dev_write_word(uint32_t w, uint32_t v)
     }
 
     if ((w & 0xFFFFFFC0u) == M3_INPUTS_BASE) {
-        if ((w & 0x3Cu) == 0x00u) g_io_ctrl = v;
+        if ((w & 0x3Cu) == 0x00u) io_ctrl_write(v);
         return;
     }
 
