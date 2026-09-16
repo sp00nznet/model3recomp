@@ -89,6 +89,7 @@ class Machine:
         self.watch = set()
         self.watch_hits = []
         self.calls = Counter()  # call-target histogram: what the game does
+        self.breaks = {}        # addresses to report the first time PC hits them
         self.hist = []          # ring of recent taken branches
         self.hist_max = 0
         self.ram_writes = 0
@@ -399,6 +400,9 @@ def run(m, entry, max_insns, stop_in_ram, trace=0, trace_at=None):
         maybe_interrupt(m)
         if m.pc != pc:
             continue
+        if pc in m.breaks and not m.breaks[pc]:
+            m.breaks[pc] = m.icount
+            print("  [reached] %08X at instruction %d" % (pc, m.icount))
         i = m.fetch(pc)
         if i.mn is None:
             return "undecodable %08X at %08X" % (i.raw, pc)
@@ -807,6 +811,8 @@ def main():
     ap.add_argument("--no-stop-in-ram", action="store_true")
     ap.add_argument("--field-period", type=lambda s: int(s, 0), default=0,
                     help="instructions per field; enables VBlank interrupts")
+    ap.add_argument("--break-at", action="append", default=[],
+                    help="report the first time the PC reaches this address")
     ap.add_argument("--trace-io", help="record device accesses (diff against "
                                        "the runtime's M3_TRACE_IO log)")
     ap.add_argument("--trace-io-max", type=lambda s: int(s, 0), default=20000)
@@ -823,6 +829,7 @@ def main():
     m = Machine(crom, int(a.base, 0), bank)
     m.watch = {int(x, 0) for x in a.watch}
     m.hist_max = a.history
+    m.breaks = {int(x, 0): 0 for x in a.break_at}
     if a.trace_io:
         m.io_log_f = open(a.trace_io, "w")
         m.io_budget = a.trace_io_max
@@ -833,6 +840,8 @@ def main():
     why = run(m, int(a.entry, 0), a.max, not a.no_stop_in_ram,
               a.trace, int(a.trace_at, 0) if a.trace_at else None)
 
+    for addr, at in sorted(m.breaks.items()):
+        print("break %08X     : %s" % (addr, ("reached at %d"%at) if at else "NEVER REACHED"))
     print("stopped         : %s" % why)
     print("instructions    : %d" % m.icount)
     print("pc              : %08X" % m.pc)
