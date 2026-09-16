@@ -88,6 +88,24 @@ uint8_t *bus_vram(size_t *size)
     return g_vram;
 }
 
+uint8_t *bus_cull_lo(size_t *size)
+{
+    if (size) *size = CULL_LO_SIZE;
+    return g_cull_lo;
+}
+
+uint8_t *bus_cull_hi(size_t *size)
+{
+    if (size) *size = CULL_HI_SIZE;
+    return g_cull_hi;
+}
+
+uint8_t *bus_poly(size_t *size)
+{
+    if (size) *size = POLY_SIZE;
+    return g_poly;
+}
+
 /* ---- big-endian accessors over a host buffer --------------------------- */
 static inline uint32_t be32(const uint8_t *p)
 {

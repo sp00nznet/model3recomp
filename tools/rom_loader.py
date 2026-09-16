@@ -72,6 +72,45 @@ def vector_score(img):
     return hits
 
 
+def interleave_n(bufs, lanes, word=2):
+    """Interleave `lanes` chips, `word` bytes at a time, byte-swapped.
+
+    The program and banked CROMs use four chips two bytes apart; VROM uses
+    sixteen. Same shape, different width.
+    """
+    n = len(bufs[0])
+    out = bytearray(n * lanes)
+    for lane, buf in enumerate(bufs):
+        for i in range(0, n, word):
+            out[i * lanes + lane * word] = buf[i + 1]
+            out[i * lanes + lane * word + 1] = buf[i]
+    return bytes(out)
+
+
+def build_region(files, names, lanes, out_path, label):
+    """Assemble `names` (a multiple of `lanes`) into one interleaved image."""
+    if len(names) % lanes:
+        # The SCSP sample ROMs are the same size as the VROM chips and sort
+        # after them, so trim to a whole number of lanes rather than refusing.
+        keep = len(names) // lanes * lanes
+        if not keep:
+            print("%s: %d chips, need a multiple of %d; skipping"
+                  % (label, len(names), lanes), file=sys.stderr)
+            return 0
+        print("%s: using the first %d of %d chips (the rest are another "
+              "region)" % (label, keep, len(names)), file=sys.stderr)
+        names = names[:keep]
+    parts = []
+    for g in range(0, len(names), lanes):
+        parts.append(interleave_n([files[n] for n in names[g:g + lanes]], lanes))
+    img = b"".join(parts)
+    with open(out_path, "wb") as f:
+        f.write(img)
+    print("%-14s : %s  (0x%X bytes from %d chips)"
+          % (label, out_path, len(img), len(names)))
+    return len(img)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -80,6 +119,8 @@ def main():
     ap.add_argument("out")
     ap.add_argument("--size", type=lambda s: int(s, 0), default=0x80000,
                     help="program EPROM size (default 0x80000)")
+    ap.add_argument("--banked", help="also write the banked CROM (CROM0..3)")
+    ap.add_argument("--vrom", help="also write the VROM (texture/model data)")
     a = ap.parse_args()
 
     files = load_files(a.src)
@@ -118,6 +159,17 @@ def main():
     print("maps at        : 0x%08X" % base)
     print("reset vector   : 0x%08X" % (base + len(img) - 0x100000 + 0x100))
     print("verified       : %d/%d exception vectors" % (score, len(VEC_CHECK)))
+
+    # The banked CROM holds the bulk of the game's data and the VROM its
+    # models and textures. A game whose banked CROM reads as zero boots and
+    # then has nothing to show.
+    if a.banked:
+        names = sorted(n for n, b in files.items()
+                       if len(b) == 0x200000 and n not in order)
+        build_region(files, names, 4, a.banked, "banked CROM")
+    if a.vrom:
+        names = sorted(n for n, b in files.items() if len(b) == 0x400000)
+        build_region(files, names, 16, a.vrom, "VROM")
     return 0
 
 
