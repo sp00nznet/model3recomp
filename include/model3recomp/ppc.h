@@ -135,6 +135,13 @@ static inline uint64_t m3_f64_to_bits(double d) { uint64_t b; memcpy(&b, &d, 8);
  */
 extern m3_ppc_t m3_ctx;
 
+/* Retired guest instructions. Lifted functions add their own count, and the
+ * runtime uses it as the clock -- it is the only measure of guest progress a
+ * recompiled program has, since there is no interpreter loop to count in.
+ * Declared here rather than in model3recomp.h because lifted code includes
+ * lift.h and nothing else. */
+extern uint64_t m3_work;
+
 #define PPC_R(n)    (m3_ctx.r[(n)])
 #define PPC_F(n)    (m3_ctx.f[(n)])
 #define PPC_LR      (m3_ctx.lr)

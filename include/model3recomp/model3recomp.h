@@ -60,11 +60,8 @@ void model3recomp_set_frame_hook(void (*hook)(void));
 /* Write the current framebuffer to a binary PPM. Returns 0 on failure. */
 int  model3recomp_screenshot(const char *path);
 
-/* A monotonically increasing measure of how much work the guest has done:
- * dispatched calls and device accesses. The headless platform paces fields
- * off it, because there is no wall clock to pace against and lifted code has
- * no instruction count to read. */
-extern uint64_t m3_work;
+/* m3_work -- retired guest instructions, the runtime's clock -- is declared
+ * in ppc.h, which lifted code reaches through lift.h. */
 
 /* Boot. Resets the CPU and enters the guest at its reset vector, which for
  * every Model 3 title is 0xFFF00100. Does not return while the game runs --
