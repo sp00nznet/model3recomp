@@ -68,6 +68,15 @@ static uint8_t *g_cull_lo, *g_cull_hi, *g_poly;
 static uint8_t *g_texport;
 static uint32_t g_texport_pos;
 
+/* A second Real3D port at 0x90000000. The game DMAs to it through the helper
+ * at RAM 0x00118A20 -- the same one that feeds 0x88000000 and 0x9C000000, and
+ * which drives the SCSI engine to do it. Leaving the region unmapped made the
+ * SCRIPTS engine reject those moves as out of range, so the uploads were
+ * silently dropped. */
+#define R3DPORT2_BASE 0x90000000u
+#define R3DPORT2_SIZE 0x100000u
+static uint8_t *g_r3dport2;
+
 /* Tilemap generator registers at 0xF1180000. These say what is actually on
  * screen -- layer enable, scroll, and where each layer's name table lives --
  * so discarding them means rendering from guesses. Stored so the renderer and
@@ -84,8 +93,9 @@ void bus_init(const m3_roms_t *roms)
     g_cull_hi = calloc(1, CULL_HI_SIZE);
     g_poly    = calloc(1, POLY_SIZE);
     g_texport = calloc(1, TEXPORT_SIZE);
+    g_r3dport2 = calloc(1, R3DPORT2_SIZE);
     if (!g_ram || !g_backup || !g_vram || !g_cull_lo || !g_cull_hi || !g_poly ||
-        !g_texport) {
+        !g_texport || !g_r3dport2) {
         fprintf(stderr, "[model3recomp] out of memory allocating the board\n");
         abort();
     }
@@ -101,9 +111,10 @@ void bus_init(const m3_roms_t *roms)
 void bus_shutdown(void)
 {
     free(g_ram); free(g_backup); free(g_vram);
-    free(g_cull_lo); free(g_cull_hi); free(g_poly); free(g_texport);
+    free(g_cull_lo); free(g_cull_hi); free(g_poly); free(g_texport); free(g_r3dport2);
     g_ram = g_backup = g_vram = g_cull_lo = g_cull_hi = g_poly = NULL;
     g_texport = NULL;
+    g_r3dport2 = NULL;
     g_texport_pos = 0;
     m3_ram_base = NULL;
 }
@@ -191,6 +202,9 @@ static uint8_t *direct(uint32_t a, uint32_t size, int write)
     /* The texture/command port is a FIFO: every access lands at the write
      * cursor rather than at an address. Give DMA a linear window so a block
      * move fills it in order. */
+    if (a >= R3DPORT2_BASE && a < R3DPORT2_BASE + R3DPORT2_SIZE)
+        return g_r3dport2 + (a - R3DPORT2_BASE);
+
     if (a >= M3_R3D_TEXPORT && a < M3_R3D_TEXPORT + TEXPORT_SIZE) {
         uint32_t off = a - M3_R3D_TEXPORT;
         if (off > g_texport_pos) g_texport_pos = off;

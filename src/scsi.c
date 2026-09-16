@@ -77,6 +77,9 @@ static int mapped(uint32_t a, uint32_t len)
      * Rejecting it meant the completion interrupt never fired and the guest
      * polled ISTAT twenty million times. */
     if (a >= 0x88000000u && end <= 0x88000100u) return 1;   /* R3D trigger */
+    /* The game DMAs here too, from RAM 0x0010FA94 through the same helper.
+     * Omitting it meant those uploads were rejected as out of range. */
+    if (a >= 0x90000000u && end <= 0x90100000u) return 1;   /* R3D port 2  */
     if (a >= 0x9C000000u && end <= 0x9D000000u) return 1;   /* R3D texture */
     return 0;
 }
