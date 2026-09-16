@@ -415,3 +415,52 @@ per frame.
 
 The game therefore describes a complete 3D scene every field. What is missing
 is something to draw it.
+
+
+## Where the bring-up stands, and what is in the way
+
+The recompiled game boots, copies itself into RAM, completes I/O init,
+enumerates PCI and configures the 53C810, runs SCSI DMA, takes VBlank
+interrupts, and runs its frame loop indefinitely. The interpreter and the
+lifted code agree over 30,000 device accesses and produce identical buffers.
+
+It does not draw. The useful detail is *where* it stops, and the hot-dispatch
+histogram is what found it -- a recompiled game has no stack and no program
+counter, so the routines its idle loop keeps calling are the closest thing to
+knowing where it is:
+
+```
+[model3recomp] most-dispatched guest addresses:
+    00117864  x868120     <- the null service stub, spun on by the main loop
+    00000500  x462        <- the external interrupt handler
+```
+
+The frame routines themselves do run, once per field each, including the
+Real3D driver at 0x0010BD58, 0x0010C0BC and 0x00102E60. So the graphics driver
+is called every frame and simply declines to emit anything.
+
+What it tests is an input bit:
+
+```
+0x0010C0D8  lhz   r29, 0x0E9A(r9)    ; r9 = 0, the input state block
+            lbz   r0, 0x20(r9)       ; 0x12F4, must be zero -- it is
+            bne   0x0010C228
+0x0010C0F0  andi. r29, 0x0800        ; <- taken as CLEAR, every frame
+            beq   0x0010C1FC         ; so the geometry path is skipped
+```
+
+RAM 0x0E9A reads as 0x0000, and the surrounding input block is full of 0xF000
+patterns. That block is filled from the I/O board, whose serial protocol this
+runtime does not implement: the ready line at 0xF0040004 is toggled so the
+boot's handshake loops terminate, which is enough to get past initialisation
+and is not enough to deliver real button state.
+
+So the next piece is the 315-5649 I/O board's serial protocol, modelled
+properly rather than stubbed. The board is clocked over 0xF0040000 -- the
+routine at RAM 0x0011A338 writes a data value, delays, sets bit 0x80 to clock
+it, and delays again -- and answers on bit 0x20000000 of 0xF0040004.
+
+It is worth saying plainly that this is the fifth thing to look like the last
+obstacle. Each of the previous four was real and had to be fixed, and none of
+them was final. The difference here is that the evidence is specific: a named
+branch, on a named bit, of a word whose contents are known to be wrong.
