@@ -103,6 +103,12 @@ void irq_tick(void)
          * 0x02000000, because the two are separate events at opposite ends of
          * the blanking interval. The differential trace caught that one. */
         irq_raise(M3_IRQ_VBLANK_START);
+        /* The guest's enable mask is 0x2E000000, so 0x20000000 and
+         * 0x08000000 are enabled too and this runtime never asserts them.
+         * Asserting them with the field is wrong, though: the guest does not
+         * acknowledge them, so they stay pending and the handler re-enters
+         * 212,812 times across 600 fields instead of 482. It is not waiting
+         * for them. */
         model3recomp_begin_frame();
     }
 
