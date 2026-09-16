@@ -29,6 +29,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Accessors for tilemap VRAM, Real3D culling and polygon RAM, and the VROM.
 - Inline fast path for guest memory: work RAM is handled in `lift.h` instead of
   calling into the bus for every load and store.
+- Lifted code counts retired instructions per basic block into `m3_work`, which
+  is the runtime's clock. The headless platform divides it by the 66 MHz bus
+  clock, so a field lands every ~1.15 M instructions -- what a field is on the
+  board.
+- `bus_dma_copy` block-copies when both ends are plain memory, instead of
+  walking every byte through the bus.
 
 ### Fixed
 - **Interrupts are delivered on a timer, not on a status poll.** The frame was
@@ -54,6 +60,19 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Out-of-image branch targets are no longer emitted as C labels.
 - Headless frame pacing: a virtual clock that advances per query, rather than
   reporting a field as always due, which starved the guest's main loop.
+- Instruction counting is per basic block, not per function entry. Counting on
+  entry alone freezes the clock inside a loop, so a guest spinning on a flag
+  that only an interrupt sets waits forever for an interrupt that cannot come.
+  Fields arrived at a steady 1,147,413 instructions each and stopped at 40.
+- `m3_work` is declared in `ppc.h`, where lifted code can see it -- lifted code
+  includes `lift.h` and nothing else, so the declaration in `model3recomp.h`
+  broke every generated translation unit.
+- Calls resolve against the functions actually emitted, not against every
+  address discovery proposed; an entry whose walk yielded nothing became an
+  unresolved external instead of a reportable func-table miss.
+- `bus_dma_copy` validates the whole range before block-copying. `direct()`
+  resolves one address and knows nothing about length, so a copy starting
+  inside work RAM could have run past the end of the allocation.
 
 ## [0.1.0] — 2026-09-15 — _"Reset Vector"_
 
