@@ -521,3 +521,48 @@ sitting in a mode that does not draw. Everything downstream of that -- the
 Real3D routines, the geometry emitters, the renderer that does not exist yet
 -- is unreachable until the mode advances, which is why fixing hardware
 underneath it kept changing nothing.
+
+
+### The mode variable, and the chain that would start rendering
+
+The mode is a byte at RAM **0x000005E1**. It reads 0 and stays 0. The table
+that indexes it is at RAM 0x001A27E4 -- one word earlier than it first appears,
+which is what makes the indices line up:
+
+| Mode | Function | |
+|---|---|---|
+| 3 | 0x0010B840 | decides whether to advance |
+| 4 | 0x00103C68 | **installs the frame task** |
+
+Mode 4's body is worth quoting, because its precondition is already satisfied:
+
+```
+0x00103CAC  lis  r9, 0x001A ; addi r11, r9, 0x3474
+            lwz  r0, 0(r11)          ; [0x001A3474], reads 0
+            cmpwi r0, 0
+            bne  0x00103CD0          ; not taken
+0x00103CC0  lis  r9, 1 ; addi r3, r9, -0x1DD8   ; r3 = 0x0000E228
+            bl   0x00117C44          ; install it as the frame task
+```
+
+So if mode 4 ever ran, the frame task would be installed and the game would
+start drawing. It never runs, because the mode never leaves 0.
+
+Both places that set the mode to 4 -- 0x0010A9D4 and 0x0010B224 -- are reached
+only from mode 3 at 0x0010B840, which gates on a flag at **0x001CCBF8**:
+
+```
+0x0010B840  cmpwi r3, 0
+            beq   0x0010B87C
+            ...                       ; r3 != 0: mode <- 5
+0x0010B87C  lis  r9, 0x001D
+            lbz  r0, -0x3408(r9)      ; [0x001CCBF8]
+            cmpwi r0, 0
+            beq   0x0010B894          ; zero: do nothing
+            bl    0x0010ADA4          ; non-zero: mode <- 4
+```
+
+That is as far as static analysis goes here. The game sits in mode 0, and what
+would move it through 1, 2 and 3 is game logic rather than hardware -- which is
+consistent with eight separate hardware fixes underneath it each changing
+nothing at all.
