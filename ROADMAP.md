@@ -4,20 +4,44 @@ The goal for the first milestone is one specific frame: **The Lost World's
 attract mode**. Everything below is ordered by what that actually requires,
 not by what is most interesting to write.
 
-## Next: close the interpreter/native divergence
+## Next: find out why the game never starts its game task
 
-The boot interpreter reaches the game's main loop and the game draws into
-tilemap VRAM under it. The native build does not get that far, despite running
-the same lifted instruction set. One of them is wrong and they can be compared.
+The port runs. The interpreter and the lifted code agree over 30,000 device
+accesses and produce identical buffers. The game boots, copies itself into RAM,
+enumerates PCI, configures the 53C810, runs SCSI DMA, takes VBlank interrupts,
+loads its 769-tile character set, programs the Real3D viewport and LOD table,
+and then runs the same handful of system tasks every field, for ever.
 
-- Step both from the same reset state and diff the register file and RAM at
-  intervals until they part company. That is the conformance harness the repo
-  owes anyway, and it pays for itself immediately here.
-- Likely suspects, in order: an instruction whose C translation differs from
-  the interpreter's Python, interrupt delivery timing, and the SCSI trigger
-  conditions.
+The frame body is only ever input gathering (RAM 0x001180A8), a service call
+through the pointer at 0x001EED94, and a wait. That pointer holds 0x00117864,
+the null `blr` stub the boot installs, and nothing ever replaces it. The
+routines that would talk to the Real3D -- the culling-RAM writer at
+0x0010F3E4, the trigger at 0x0010F260, the texture port at 0x0010F214 -- are
+never dispatched at all.
 
-Once they agree, everything below is reachable.
+So the question is not "why does the renderer not draw", it is "what would
+install a real per-frame task, and what is it waiting for". The interrupt
+library's install routines are at RAM 0x00117BF4 and 0x00117C34, writing the
+slots at 0x001EED7C onward; finding their callers and what gates them is the
+thread to pull.
+
+Ruled out by measurement, each of which was a real defect that had to be
+fixed and none of which was the cause:
+
+| Checked | Result |
+|---|---|
+| PCI enumeration | was finding no devices at all; fixed, game now configures the 53C810 itself |
+| Real3D ready bit at 0x84000000 | the game spins on it with a branch-to-self; fixed |
+| Interrupt delivery | was dropped whenever MSR[EE] was clear at the field boundary; fixed |
+| Field pacing | three separate bugs, all presenting as silence; fixed |
+| Sound board | polled non-blocking; reporting data ready changes nothing |
+| I/O board framing | derived from the guest and modelled; the replies are still a stub |
+
+## Then: the Real3D
+
+Once the game submits a scene there is still nothing to draw it. Culling-RAM
+node walk, display-list parse, VROM model and texture decode, transform,
+light, clip and rasterise. That is board-level work and belongs here.
 
 ## Then: something on screen
 
