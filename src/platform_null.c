@@ -50,11 +50,18 @@ int platform_poll(void) { return 1; }
 
 void platform_present(void) { }
 
-/* Pacing off calls alone stalls: the guest spends long stretches polling
- * devices without dispatching through a pointer, so fields stop arriving
- * entirely. m3_work counts both. */
+/* m3_work counts retired guest instructions, so dividing by the 66 MHz clock
+ * gives a virtual microsecond and a field lands every ~1.15 M instructions --
+ * which is what a field is on the real board.
+ *
+ * Pacing off device traffic instead, as this first did, is not merely
+ * inaccurate: a game that computes for millions of instructions between two
+ * device accesses barely advances at all. Nine hundred fields took over half
+ * an hour and never finished. */
+#define M3_CLOCK_MHZ 66u
+
 uint64_t platform_ticks_us(void)
 {
-    g_virtual_us = m3_work;
+    g_virtual_us = m3_work / M3_CLOCK_MHZ;
     return g_virtual_us;
 }

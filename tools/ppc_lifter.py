@@ -937,7 +937,14 @@ def emit_function(em, fn, prefix, entries):
     out = ["/* %s: function at 0x%08X (%d instructions) */"
            % (fname(prefix, fn.entry), fn.entry, len(fn.insns)),
            "void %s(void)" % fname(prefix, fn.entry),
-           "{"]
+           "{",
+           # The runtime's only measure of how much guest work has happened.
+           # Without it the virtual clock advances on device traffic alone, so
+           # a game that computes for millions of instructions between two
+           # device accesses sees almost no fields and takes forever to reach
+           # anything. An approximation -- not every path runs every
+           # instruction -- but proportional, monotonic, and free.
+           "    m3_work += %d;" % len(fn.insns)]
 
     # `blr` is ambiguous. Usually it is a return, and the C call stack mirrors
     # the guest's, so `return;` is right. But PowerPC also uses mtlr+blr as a
@@ -1083,6 +1090,13 @@ def main():
     fns = [build(image, base, e, hard) for e in sorted(entries)]
     fns = [f for f in fns if f.insns]
 
+    # Resolve calls against what was actually emitted, not against every
+    # address discovery proposed. An entry whose walk produced no instructions
+    # -- it pointed at a zero word, or off the end -- is dropped here, and a
+    # direct call to it would then be a link error rather than anything the
+    # runtime could report.
+    emitted = {f.entry for f in fns}
+
     os.makedirs(a.outdir, exist_ok=True)
     chunks = [fns[i:i + a.funcs_per_file]
               for i in range(0, len(fns), a.funcs_per_file)]
@@ -1093,7 +1107,7 @@ def main():
             f.write('#include "model3recomp/lift.h"\n')
             f.write('#include "%s_funcs.h"\n\n' % a.prefix)
             for fn in chunk:
-                f.write(emit_function(em, fn, a.prefix, entries))
+                f.write(emit_function(em, fn, a.prefix, emitted))
                 f.write("\n\n")
 
     with open(os.path.join(a.outdir, "%s_funcs.h" % a.prefix), "w") as f:

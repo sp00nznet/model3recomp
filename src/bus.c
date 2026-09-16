@@ -220,7 +220,9 @@ static uint32_t g_dev_accesses;
 static void spin_note(uint32_t a, int write)
 {
     unsigned i, weakest = 0;
-    m3_work++;                     /* device traffic counts as progress too */
+    /* Instruction counts in lifted code are the clock now; device traffic
+     * still nudges it so a guest stuck in a pure polling loop keeps ticking. */
+    m3_work++;
     uint32_t key = (a & ~3u) | (write ? 1u : 0u);
     for (i = 0; i < SPIN_SLOTS; i++) {
         if (g_spin[i].addr == key && g_spin[i].n) {

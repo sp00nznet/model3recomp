@@ -17,6 +17,11 @@
 Part of the sp00nznet recomp family, and conforming to its house style:
 `model2recomp`, `cps1recomp`, `pacrecomp`, `lindberghrecomp` and successors.
 
+**This is the board, not a game.** One toolkit per board, one repository per
+title: [`lostworld`](https://github.com/sp00nznet/lostworld) is the bring-up of
+*The Lost World: Jurassic Park* on top of this, the way `virtuacop` and
+`daytonausa` sit on `model2recomp`. Start there if you want to run something.
+
 **Title-agnostic.** Nothing here knows what game it is running. The memory map,
 interrupt controller, tilemap and Real3D interfaces all come from the board,
 not the title. *The Lost World: Jurassic Park* (1997) is the reference game it
