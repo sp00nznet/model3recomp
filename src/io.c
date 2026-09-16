@@ -98,23 +98,39 @@ uint32_t io_ctrl_read(void)
 
 uint32_t io_data_read(void)
 {
-    /* The framing above is read out of the guest's code and is right. What
-     * the board *says* is not modelled, and a reply shifted out on the clock
-     * -- the obvious thing -- measurably gets the boot less far than simply
-     * toggling the line: with it the game stops setting up the Real3D
-     * viewport at all, where the toggle leaves 8,306 words of culling RAM
-     * programmed.
+    /* 0xF0040004 is multiplexed: what it returns depends on what was last
+     * written to 0xF0040000. Two callers want two different things from it,
+     * and serving either one alone breaks the other.
      *
-     * So the line is toggled, deliberately and with that noted, until the
-     * board's actual replies are known. It is enough to satisfy the boot's
-     * two handshake loops -- one waiting for the line to clear, one for it to
-     * set -- and it is not enough to deliver real button state, which is why
-     * the input blocks never show an edge.
+     * The input path at RAM 0x00117890 strobes and reads:
      *
-     * ponytail: toggled ready line; replace with the 315-5649's real replies
-     * once the command set is known. */
-    static uint32_t phase;
-    uint32_t v = 0xFFFFFFFFu;
-    phase ^= IO_REPLY_BIT;
-    return v ^ phase;
+     *     stw  r10, 0(r11)      ; r10 = 0x01000000 -- clock bit LOW
+     *     lwz  r0,  0(r11)      ; handshake is on the control latch
+     *     andis. r9, r0, 0x100
+     *     beq  -0xC
+     *     lwz  r0, 4(r9)        ; <- wants button state here
+     *
+     * The serial path at RAM 0x0011A650 bit-bangs a byte first, and its
+     * primitive at 0x0011A338 leaves the clock bit HIGH:
+     *
+     *     stwbrx r4, ...        ; 0x51 -> 0x51000000
+     *     ori    r4, r4, 0x80
+     *     stwbrx r4, ...        ; 0xD1 -> 0xD1000000, clock HIGH
+     *     lwz    r0, 0(r30)     ; <- wants the board's reply here
+     *
+     * So the clock bit tells them apart. Returning the reply line
+     * unconditionally injects a phantom button press on every other read --
+     * which is what put the game into its own service menu instead of attract
+     * mode. Returning button state unconditionally hangs the serial
+     * handshake, which waits for the line to change.
+     *
+     * Inputs are active low, so nothing pressed is all ones. */
+    if (g_ctrl & IO_CLOCK) {
+        /* ponytail: the reply is toggled, not driven by the real 315-5649
+         * protocol -- enough for the handshake, not real board data. */
+        static uint32_t phase;
+        phase ^= IO_REPLY_BIT;
+        return 0xFFFFFFFFu ^ phase;
+    }
+    return 0xFFFFFFFFu;
 }

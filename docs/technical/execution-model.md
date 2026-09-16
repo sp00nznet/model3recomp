@@ -566,3 +566,55 @@ That is as far as static analysis goes here. The game sits in mode 0, and what
 would move it through 1, 2 and 3 is game logic rather than hardware -- which is
 consistent with eight separate hardware fixes underneath it each changing
 nothing at all.
+
+
+## It is not stuck -- it is in the service menu
+
+The mode byte at 0x000005E1 and the code around 0x0010A000-0x0010C000 are not
+the game's state machine. They are its **test menu**. The table that byte
+indexes, at RAM 0x00139D24, holds string pointers:
+
+```
+0x00139D54  45584954              "EXIT"
+0x00139D5C  4D414E55 414C2053     "MANUAL S"
+0x00139D64  45545449 4E47         "ETTING"
+0x00139D6C  434F494E 2F435245     "COIN/CRE"
+```
+
+So the port has not been failing to start the game. It has been booting into
+the operator's service menu, with item 0 selected, exactly as a real cabinet
+does when the test switch is held -- and the reason is the input register.
+
+**0xF0040004 is multiplexed.** What it returns depends on what was last
+written to 0xF0040000, and two callers want different things from it:
+
+| Caller | Leaves the clock bit | Wants |
+|---|---|---|
+| RAM 0x00117890 | low | button state |
+| RAM 0x0011A650 | high | the I/O board's serial reply |
+
+Serving only the serial reply injects a phantom button press on every other
+read, which is what held the test switch down. Serving only button state hangs
+the serial handshake, which waits for the line to change. The clock bit tells
+them apart, and modelling that gets both: the game reaches its main loop *and*
+the handshake completes.
+
+What remains wrong is the button encoding. 0x00117890 reads the register
+twice, with the strobe high and then low -- two input banks -- combines them
+and inverts the result:
+
+```
+0x001178E0  lwz    r11, 4(r9)          ; second bank
+            rlwinm r10, r31, 0, 22, 23
+            rlwinm r9,  r10, 2, 0, 29
+            rlwinm r11, r11, 8, 24, 31
+            rlwinm r0,  r11, 8, 20, 21
+            and    r0, r0, r9
+            or     r0, r0, r10
+            nor    r0, r0, r0          ; active low
+```
+
+Returning all-ones for both banks does not invert to "nothing pressed", so the
+banks carry different data and the encoding has to be worked out rather than
+assumed. Until it is, the game sees a button held and goes where a real
+cabinet would go.
