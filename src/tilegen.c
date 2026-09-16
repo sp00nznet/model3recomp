@@ -19,6 +19,7 @@
 #include "model3recomp/bus.h"
 #include "model3recomp/platform.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #define VRAM_PATTERN     0x000000u
@@ -109,6 +110,12 @@ void tilegen_render(void)
 
     if (!fb || !v)
         return;
+    {
+        static uint64_t frames;
+        if ((++frames % 100000ull) == 0)
+            fprintf(stderr, "[model3recomp] tilegen rendered %llu times\n",
+                    (unsigned long long)frames);
+    }
 
     /* Layers draw back to front; the bottom one is opaque so the frame is
      * fully covered even where nothing wrote a tile. */

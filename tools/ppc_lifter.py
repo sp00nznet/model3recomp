@@ -955,7 +955,7 @@ def emit_function(em, fn, prefix, entries):
         block_len[b] = sum(1 for a in addrs
                            if a >= b and (end is None or a < end))
     if block_len.get(fn.entry):
-        out.append("    m3_work += %d;" % block_len[fn.entry])
+        out.append("    WORK(%d);" % block_len[fn.entry])
 
     # `blr` is ambiguous. Usually it is a return, and the C call stack mirrors
     # the guest's, so `return;` is right. But PowerPC also uses mtlr+blr as a
@@ -976,7 +976,7 @@ def emit_function(em, fn, prefix, entries):
         if addr in fn.labels:
             out.append("L_%08X: ;" % addr)
             if block_len.get(addr):
-                out.append("    m3_work += %d;" % block_len[addr])
+                out.append("    WORK(%d);" % block_len[addr])
             imm_regs.clear()          # unknown path in: assume nothing
             lr_from_imm = False
         ret = "0x%08Xu" % (addr + 4)

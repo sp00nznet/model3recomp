@@ -142,6 +142,14 @@ extern m3_ppc_t m3_ctx;
  * lift.h and nothing else. */
 extern uint64_t m3_work;
 
+/* When m3_work next reaches this, lifted code must call m3_tick(). The runtime
+ * otherwise only gets control at a dispatched call or a device access, and a
+ * loop that touches nothing but work RAM reaches neither -- the clock advances
+ * and nobody reads it, so the field never arrives and the guest waits forever
+ * for an interrupt. */
+extern uint64_t m3_next_tick;
+void m3_tick(void);
+
 #define PPC_R(n)    (m3_ctx.r[(n)])
 #define PPC_F(n)    (m3_ctx.f[(n)])
 #define PPC_LR      (m3_ctx.lr)

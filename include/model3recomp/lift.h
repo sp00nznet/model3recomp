@@ -82,6 +82,11 @@ static inline void m3_st8(uint32_t a, uint32_t v)
 #define MEM_W32(a,v)  m3_st32((uint32_t)(a),(uint32_t)(v))
 #define MEM_W64(a,v)  bus_write64((uint32_t)(a),(uint64_t)(v))
 
+/* Retire N guest instructions, and give the runtime a look in when enough
+ * have gone by. The compare is inline and almost always false; the call is
+ * roughly once per 64 K instructions. */
+#define WORK(n)                                                                   do {                                                                              m3_work += (n);                                                               if (m3_work >= m3_next_tick) m3_tick();                                   } while (0)
+
 /* Condition / flag updates */
 #define CR0(v)        m3_cr0(&m3_ctx,(int32_t)(v))
 #define CRF(f,v)      m3_cr_set(&m3_ctx,(f),(v))

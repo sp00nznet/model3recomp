@@ -34,8 +34,22 @@ static uint32_t g_enable;
 static uint64_t g_field;
 static int      g_in_dispatch;
 
+uint64_t m3_next_tick;
+
+/* How many guest instructions between checks. A field is ~1.15 M, so this is
+ * fine-grained enough to place a field accurately and coarse enough that the
+ * check costs nothing. */
+#define TICK_QUANTUM 65536u
+
+void m3_tick(void)
+{
+    m3_next_tick = m3_work + TICK_QUANTUM;
+    irq_tick();
+}
+
 void irq_init(void)
 {
+    m3_next_tick = TICK_QUANTUM;
     g_pending = 0;
     g_enable  = 0;
     g_field   = 0;
@@ -60,6 +74,22 @@ void irq_enable_write(uint32_t v)  { g_enable = v; }
  */
 void irq_tick(void)
 {
+    /* Watchdog. A recompiled game that stops making progress gives no stack
+     * and no program counter, so the runtime reports the little it knows:
+     * whether it is still being reached at all, whether the guest is inside
+     * its own interrupt handler and not coming out, and whether the clock is
+     * moving. Each cause looks identical from outside without this. */
+    {
+        static uint64_t calls, last_work, quiet;
+        calls++;
+        if (m3_work != last_work) { last_work = m3_work; quiet = 0; }
+        else if (++quiet == 20000000ull)
+            fprintf(stderr, "[model3recomp] %llu ticks, clock frozen at %llu, "
+                            "in_dispatch=%d\n",
+                    (unsigned long long)calls, (unsigned long long)m3_work,
+                    g_in_dispatch);
+    }
+
     if (g_in_dispatch)
         return;
     if (!model3recomp_field_due())

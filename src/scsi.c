@@ -84,6 +84,11 @@ static void scsi_run(uint32_t dsp)
 {
     unsigned steps;
     uint64_t moved = 0;
+    static uint64_t runs;
+
+    if ((++runs % 1000000ull) == 0)
+        fprintf(stderr, "[model3recomp] %llu SCRIPTS programs run\n",
+                (unsigned long long)runs);
 
     for (steps = 0; steps < 4096; steps++) {
         uint32_t d0 = swap32(bus_read32(dsp));
