@@ -14,6 +14,7 @@
  */
 #include "model3recomp/scsi.h"
 #include "model3recomp/bus.h"
+#include "model3recomp/irq.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -132,6 +133,13 @@ static void scsi_run(uint32_t dsp)
             if (op == 3) {                          /* INT */
                 g_reg[R_ISTAT] |= ISTAT_DIP;
                 g_reg[R_DSTAT] |= DSTAT_SIR;
+                /* A SCRIPTS interrupt does not just set a status bit: the
+                 * chip asserts its PCI interrupt line, and the system
+                 * controller turns that into IRQ 0x04000000. Setting the
+                 * status alone leaves a guest that sequences its loading on
+                 * that interrupt waiting for something that has already
+                 * happened. */
+                irq_raise(M3_IRQ_SCSI);
                 return;
             }
             return;                                 /* CALL/RETURN: unused */
