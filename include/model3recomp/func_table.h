@@ -29,6 +29,10 @@ int       func_table_call(uint32_t guest_addr);
  * func_table_gen.c calls them all. */
 void      func_table_register_all(void);
 
+/* Print the most-dispatched guest addresses. The nearest thing to a stack
+ * trace when a recompiled game stops making progress. */
+void      func_table_dump_hot(void);
+
 #ifdef __cplusplus
 }
 #endif

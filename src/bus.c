@@ -67,6 +67,12 @@ static uint8_t *g_cull_lo, *g_cull_hi, *g_poly;
 static uint8_t *g_texport;
 static uint32_t g_texport_pos;
 
+/* Tilemap generator registers at 0xF1180000. These say what is actually on
+ * screen -- layer enable, scroll, and where each layer's name table lives --
+ * so discarding them means rendering from guesses. Stored so the renderer and
+ * the dumps can read them back. */
+static uint8_t g_tilegen_reg[0x100];
+
 void bus_init(const m3_roms_t *roms)
 {
     g_roms = *roms;
@@ -124,6 +130,12 @@ uint8_t *bus_poly(size_t *size)
 {
     if (size) *size = POLY_SIZE;
     return g_poly;
+}
+
+const uint8_t *bus_tilegen_regs(size_t *size)
+{
+    if (size) *size = sizeof g_tilegen_reg;
+    return g_tilegen_reg;
 }
 
 uint8_t *bus_texport(size_t *size)
@@ -331,9 +343,20 @@ static uint32_t dev_read_word(uint32_t w, int side_effects)
     }
 
     /* Real3D status. Bit 1 low means "not busy"; the boot code polls it. */
-    /* Real3D status. Bit 1 low means "not busy"; the boot code polls it. */
+    /* Real3D status. Bit 0 set means ready, and the game waits on it with a
+     * branch-to-self:
+     *
+     *     0x0010F990  lis   r9, 0x8400
+     *                 lwz   r0, 0(r9)
+     *                 andi. r9, r0, 1
+     *     0x0010F99C  beq   0x0010F99C      ; spin while bit 0 is clear
+     *
+     * Returning zero here hangs the game in a way that is easy to misread:
+     * the spin is a device read, so it keeps the frame clock running and the
+     * port goes on presenting fields forever while the guest makes no
+     * progress at all. Fields ticking is not evidence of progress. */
     if ((w & 0xFF000000u) == M3_R3D_STATUS)
-        return 0;
+        return 1;
 
     if ((w & 0xFFFFFFC0u) == M3_INPUTS_BASE) {
         if ((w & 0x3Cu) == 0x00u)
@@ -383,6 +406,11 @@ static void dev_write_word(uint32_t w, uint32_t v)
      * 0xF0100018 until it clears -- miss this and the game never leaves its
      * interrupt handler. */
     if ((w & 0xFFFF0000u) == (M3_TILEGEN_REGS & 0xFFFF0000u)) {
+        unsigned o = w & 0xFCu;
+        g_tilegen_reg[o + 0] = (uint8_t)(v >> 24);
+        g_tilegen_reg[o + 1] = (uint8_t)(v >> 16);
+        g_tilegen_reg[o + 2] = (uint8_t)(v >> 8);
+        g_tilegen_reg[o + 3] = (uint8_t)v;
         if ((w & 0xFC) == 0x10) irq_ack(v);
         return;
     }

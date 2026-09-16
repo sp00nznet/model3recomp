@@ -88,6 +88,7 @@ class Machine:
         self.hw_writes = Counter()
         self.watch = set()
         self.watch_hits = []
+        self.calls = Counter()  # call-target histogram: what the game does
         self.hist = []          # ring of recent taken branches
         self.hist_max = 0
         self.ram_writes = 0
@@ -260,7 +261,7 @@ class Machine:
                 return (self.bank >> 20) << 24
             return 0
         if (w & 0xFF000000) == 0x84000000:
-            return 0                        # Real3D: never busy
+            return 1                        # Real3D ready; see src/bus.c
         if (w & 0xFFFFFFC0) == 0xF0040000:
             o = w & 0x3C
             if o == 0x00:
@@ -417,6 +418,7 @@ def run(m, entry, max_insns, stop_in_ram, trace=0, trace_at=None):
         if mn == "b":
             if i.lk:
                 m.lr = nxt
+                m.calls[i.target] += 1
             _note(m, pc, i.target, "bl" if i.lk else "b")
             m.pc = i.target
             continue
@@ -443,6 +445,7 @@ def run(m, entry, max_insns, stop_in_ram, trace=0, trace_at=None):
             tgt = (m.lr if mn == "bclr" else m.ctr) & ~3 & M
             if i.lk:
                 m.lr = nxt
+                m.calls[tgt] += 1
             if take:
                 _note(m, pc, tgt, mn)
             m.pc = tgt if take else nxt
@@ -848,6 +851,10 @@ def main():
     print("distinct hw writes: %d" % len(m.hw_writes))
     for addr, n in m.hw_writes.most_common(12):
         print("    W %08X x%d" % (addr, n))
+    if m.calls:
+        print("most-called routines (target, times):")
+        for a, c in m.calls.most_common(24):
+            print("    %08X  x%d" % (a, c))
     if m.scsi_moves:
         print("SCRIPTS memory moves: %d" % len(m.scsi_moves))
         for src, dst, cnt in m.scsi_moves[:12]:

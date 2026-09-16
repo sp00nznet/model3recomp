@@ -92,6 +92,9 @@ const uint8_t *bus_vrom(size_t *size);
 /* The Real3D's texture/command port window. The game DMAs its scene here every
  * frame; see src/bus.c. */
 uint8_t *bus_texport(size_t *size);
+
+/* Tilemap generator registers: layer enable, scroll, name-table placement. */
+const uint8_t *bus_tilegen_regs(size_t *size);
 void     bus_dma_copy(uint32_t dst, uint32_t src, uint32_t len);
 
 #ifdef __cplusplus

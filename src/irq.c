@@ -92,20 +92,27 @@ void irq_tick(void)
 
     if (g_in_dispatch)
         return;
-    if (!model3recomp_field_due())
-        return;
 
-    g_field++;
-    model3recomp_end_frame();          /* render and present */
+    if (model3recomp_field_due()) {
+        g_field++;
+        model3recomp_end_frame();      /* render and present */
 
-    /* Only the start-of-VBlank line is raised. Raising the end line in the
-     * same tick as well -- which this did at first -- leaves the guest seeing
-     * 0x03000000 pending where the hardware would show 0x02000000, because
-     * the two are separate events at opposite ends of the blanking interval.
-     * The differential trace against tools/ppc_interp.py caught it. */
-    irq_raise(M3_IRQ_VBLANK_START);
+        /* Only the start-of-VBlank line is raised. Raising the end line in
+         * the same tick as well -- which this did at first -- leaves the
+         * guest seeing 0x03000000 pending where the hardware would show
+         * 0x02000000, because the two are separate events at opposite ends of
+         * the blanking interval. The differential trace caught that one. */
+        irq_raise(M3_IRQ_VBLANK_START);
+        model3recomp_begin_frame();
+    }
+
+    /* Try to deliver on every tick, not only when a field has just elapsed.
+     * A pending, enabled interrupt fires as soon as the guest permits it --
+     * that is what a level-triggered line does. Dispatching only at the field
+     * boundary silently drops the interrupt whenever the guest happened to
+     * have MSR[EE] clear at that instant, and the handler then ran 462 times
+     * across 600 fields instead of once per field. */
     irq_dispatch();
-    model3recomp_begin_frame();
 }
 
 /* Kept as the routing for a read of 0xF0100018: a guest that *does* poll the

@@ -100,8 +100,42 @@ static long trace_budget(void)
     return n;
 }
 
+/* Which guest addresses are dispatched most. A recompiled game gives no stack
+ * and no program counter, so when it stops making progress this is the closest
+ * thing to "where is it": the routines its idle loop keeps calling. */
+enum { HOT_SLOTS = 64 };
+static struct { uint32_t addr; uint64_t n; } g_hot[HOT_SLOTS];
+
+static void hot_note(uint32_t addr)
+{
+    unsigned i, weakest = 0;
+    for (i = 0; i < HOT_SLOTS; i++) {
+        if (g_hot[i].addr == addr && g_hot[i].n) { g_hot[i].n++; return; }
+        if (g_hot[i].n < g_hot[weakest].n) weakest = i;
+    }
+    g_hot[weakest].addr = addr;
+    g_hot[weakest].n = 1;
+}
+
+void func_table_dump_hot(void)
+{
+    unsigned i, j;
+    fprintf(stderr, "[model3recomp] most-dispatched guest addresses:\n");
+    for (j = 0; j < 12; j++) {
+        unsigned best = 0;
+        for (i = 0; i < HOT_SLOTS; i++)
+            if (g_hot[i].n > g_hot[best].n) best = i;
+        if (!g_hot[best].n) break;
+        fprintf(stderr, "    %08X  x%llu\n", g_hot[best].addr,
+                (unsigned long long)g_hot[best].n);
+        g_hot[best].n = 0;
+    }
+}
+
 int func_table_call(uint32_t addr)
 {
+    hot_note(addr);
+
     enum { MISS_MAX = 64 };
     static uint32_t miss[MISS_MAX];
     static unsigned nmiss;
