@@ -178,6 +178,25 @@ static uint8_t *direct(uint32_t a, uint32_t size, int write)
     return NULL;
 }
 
+/* direct() resolves one address; it does not know how far a caller intends to
+ * read. A block copy does, and a copy that starts inside work RAM and runs
+ * past the end of it would walk straight off the allocation. So a range is
+ * only direct if both ends land in the same region.
+ */
+static uint8_t *direct_range(uint32_t a, uint32_t len, int write)
+{
+    uint8_t *p, *q;
+    if (!len) return NULL;
+    if (a + len < a) return NULL;                  /* wrapped */
+    p = direct(a, len, write);
+    if (!p) return NULL;
+    q = direct(a + len - 1u, 1, write);
+    if (!q) return NULL;
+    /* Same region, contiguous: the end must be exactly len-1 past the start. */
+    if (q != p + (len - 1u)) return NULL;
+    return p;
+}
+
 /* ---- spin detection -----------------------------------------------------
  * A recompiled game that stops making progress is almost always polling one
  * hardware register forever. There is no PC to inspect -- lifted code is
@@ -445,7 +464,21 @@ void bus_write64(uint32_t a, uint64_t v)
 
 void bus_dma_copy(uint32_t dst, uint32_t src, uint32_t len)
 {
+    /* Both ends are usually plain memory, and the game moves whole textures
+     * this way -- a byte at a time through the full bus path turns a single
+     * SCRIPTS instruction into millions of calls. Resolve once and memcpy;
+     * fall back to the slow path only when a device is involved.
+     *
+     * The regions are byte arrays in guest order, so there is no endianness
+     * to fix up: a block copy of guest memory is a block copy of ours. */
+    uint8_t *ps = direct_range(src, len, 0);
+    uint8_t *pd = direct_range(dst, len, 1);
     uint32_t i;
+
+    if (ps && pd) {
+        memmove(pd, ps, len);          /* the guest may overlap */
+        return;
+    }
     for (i = 0; i < len; i++)
         bus_write8(dst + i, bus_read8(src + i));
 }
