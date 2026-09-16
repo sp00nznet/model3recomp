@@ -473,3 +473,51 @@ interpreter while doing it, and something in its state machine has not been
 satisfied. Five things have looked like the last obstacle so far. Every one was
 a real defect that had to be fixed, and none of them was the last one, so this
 file records what is measured rather than what is predicted.
+
+
+## The game's mode table
+
+Tracing why nothing renders ends at a structure worth writing down, because it
+reframes the problem from "the renderer does not run" to "the game is in the
+wrong mode".
+
+The per-frame callback is **slot 0x001EED80**. The VBlank service chain at RAM
+0x00117B40 calls it directly:
+
+```
+0x00117B6C  lis  r9, 0x001F
+            lwz  r0, -0x1280(r9)     ; slot 0x001EED80
+            mtlr r0
+            blrl                     ; the game's frame task
+```
+
+That slot holds 0x00117864 -- the null `blr` stub -- and so do the other nine
+slots. It is not that installation never happened: the installer at
+0x00117C44 does `cmpwi r3, 0` and *substitutes* the stub when handed NULL, so
+the game asked for nothing on purpose.
+
+Three places would install a real one:
+
+| Site | Installs |
+|---|---|
+| RAM 0x000019A8 | 0x00001578 |
+| RAM 0x000019C0 | 0x0000171C |
+| RAM 0x00103CC8 | 0x0000E228 |
+
+and the last of those sits in an **eleven-entry mode table at RAM 0x001A27DC**:
+
+```
+001A27DC  001091E0 00103AB0 00107A0C 00109D18
+001A27EC  001075F0 0010B840 00103C68 00106FC4
+001A27FC  00109B3C 00107D44 0010C68C
+```
+
+Entry six is 0x00103C68, whose body installs the frame task. The table is
+reached through a pointer rather than a materialised address, so the mode
+variable that indexes it is the next thing to find.
+
+So the shape of the remaining problem is: the game is running, healthy, and
+sitting in a mode that does not draw. Everything downstream of that -- the
+Real3D routines, the geometry emitters, the renderer that does not exist yet
+-- is unreachable until the mode advances, which is why fixing hardware
+underneath it kept changing nothing.
