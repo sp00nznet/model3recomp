@@ -439,28 +439,37 @@ The frame routines themselves do run, once per field each, including the
 Real3D driver at 0x0010BD58, 0x0010C0BC and 0x00102E60. So the graphics driver
 is called every frame and simply declines to emit anything.
 
-What it tests is an input bit:
+What they are, though, is system tasks -- not rendering. Reading them
+properly:
 
-```
-0x0010C0D8  lhz   r29, 0x0E9A(r9)    ; r9 = 0, the input state block
-            lbz   r0, 0x20(r9)       ; 0x12F4, must be zero -- it is
-            bne   0x0010C228
-0x0010C0F0  andi. r29, 0x0800        ; <- taken as CLEAR, every frame
-            beq   0x0010C1FC         ; so the geometry path is skipped
-```
+* `0x00117868` is the input-edge helper, and it fixes the shape of the blocks
+  it maintains: `+0` current state, `+2` previous, `+4` newly pressed, `+6`
+  newly released.
+* So `0x0010C0BC`, which tests bit 0x0800 of the halfword at RAM `0x0E9A`, is
+  reading a **button-release edge** from the block based at `0x0E94`. It is an
+  input handler, not the geometry path. (An earlier revision of this file said
+  otherwise. It was wrong.)
+* `0x0010BD58` is a frame countdown that ends by writing a lamp byte to
+  `0xF0040014`.
 
-RAM 0x0E9A reads as 0x0000, and the surrounding input block is full of 0xF000
-patterns. That block is filled from the I/O board, whose serial protocol this
-runtime does not implement: the ready line at 0xF0040004 is toggled so the
-boot's handshake loops terminate, which is enough to get past initialisation
-and is not enough to deliver real button state.
+The routines that actually talk to the Real3D are elsewhere -- the culling-RAM
+writer at `0x0010F3E4`, the trigger at `0x0010F260`, the texture port at
+`0x0010F214` -- and **none of them appears in the histogram at all**. The game
+is not in a state whose per-frame handler renders. It is running system tasks
+and waiting.
 
-So the next piece is the 315-5649 I/O board's serial protocol, modelled
-properly rather than stubbed. The board is clocked over 0xF0040000 -- the
-routine at RAM 0x0011A338 writes a data value, delays, sets bit 0x80 to clock
-it, and delays again -- and answers on bit 0x20000000 of 0xF0040004.
+What is known to be wrong in the meantime is the I/O board. Its serial
+protocol is stubbed: the ready line at `0xF0040004` is toggled so the boot's
+handshake loops terminate, which is enough to get past initialisation and not
+enough to deliver real data. The evidence is in the input blocks, which sit at
+a constant `0xF000` and therefore never produce an edge of any kind. The board
+is clocked over `0xF0040000` -- the routine at RAM `0x0011A338` writes a data
+value, delays, sets bit 0x80 to clock it, and delays again -- and answers on
+bit 0x20000000 of `0xF0040004`.
 
-It is worth saying plainly that this is the fifth thing to look like the last
-obstacle. Each of the previous four was real and had to be fixed, and none of
-them was final. The difference here is that the evidence is specific: a named
-branch, on a named bit, of a word whose contents are known to be wrong.
+So the honest position is: the port runs the game faithfully enough that the
+game runs its own system tasks every frame and agrees with an independent
+interpreter while doing it, and something in its state machine has not been
+satisfied. Five things have looked like the last obstacle so far. Every one was
+a real defect that had to be fixed, and none of them was the last one, so this
+file records what is measured rather than what is predicted.
