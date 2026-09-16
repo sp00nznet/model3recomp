@@ -937,14 +937,25 @@ def emit_function(em, fn, prefix, entries):
     out = ["/* %s: function at 0x%08X (%d instructions) */"
            % (fname(prefix, fn.entry), fn.entry, len(fn.insns)),
            "void %s(void)" % fname(prefix, fn.entry),
-           "{",
-           # The runtime's only measure of how much guest work has happened.
-           # Without it the virtual clock advances on device traffic alone, so
-           # a game that computes for millions of instructions between two
-           # device accesses sees almost no fields and takes forever to reach
-           # anything. An approximation -- not every path runs every
-           # instruction -- but proportional, monotonic, and free.
-           "    m3_work += %d;" % len(fn.insns)]
+           "{"]
+
+    # The runtime's only measure of how much guest work has happened, and the
+    # clock it paces fields off. It has to be per basic block, not per
+    # function: a loop inside a single function would otherwise advance the
+    # counter once on entry and never again, so a guest spinning on a flag
+    # that only an interrupt sets would freeze time and wait forever for the
+    # interrupt that time was supposed to bring. That is exactly what happened
+    # -- fields arrived at a steady 1.15 M instructions each and then stopped
+    # dead at field 40.
+    addrs = [a for a, _ in fn.insns]
+    bounds = sorted({fn.entry} | (fn.labels & set(addrs)))
+    block_len = {}
+    for n, b in enumerate(bounds):
+        end = bounds[n + 1] if n + 1 < len(bounds) else None
+        block_len[b] = sum(1 for a in addrs
+                           if a >= b and (end is None or a < end))
+    if block_len.get(fn.entry):
+        out.append("    m3_work += %d;" % block_len[fn.entry])
 
     # `blr` is ambiguous. Usually it is a return, and the C call stack mirrors
     # the guest's, so `return;` is right. But PowerPC also uses mtlr+blr as a
@@ -964,6 +975,8 @@ def emit_function(em, fn, prefix, entries):
     for addr, i in fn.insns:
         if addr in fn.labels:
             out.append("L_%08X: ;" % addr)
+            if block_len.get(addr):
+                out.append("    m3_work += %d;" % block_len[addr])
             imm_regs.clear()          # unknown path in: assume nothing
             lr_from_imm = False
         ret = "0x%08Xu" % (addr + 4)
