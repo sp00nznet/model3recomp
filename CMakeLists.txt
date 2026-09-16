@@ -15,6 +15,7 @@ set(M3_SOURCES
     src/func_table.c
     src/irq.c
     src/scsi.c
+    src/pci.c
     src/screenshot.c
     src/tilegen.c
 )

@@ -88,6 +88,10 @@ uint8_t *bus_poly(size_t *size);
  * the CPU's address map -- on hardware only the graphics processor reads it --
  * so the renderer gets at it through here. */
 const uint8_t *bus_vrom(size_t *size);
+
+/* The Real3D's texture/command port window. The game DMAs its scene here every
+ * frame; see src/bus.c. */
+uint8_t *bus_texport(size_t *size);
 void     bus_dma_copy(uint32_t dst, uint32_t src, uint32_t len);
 
 #ifdef __cplusplus

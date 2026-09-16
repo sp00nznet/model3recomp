@@ -12,6 +12,7 @@
 #include "model3recomp/bus.h"
 #include "model3recomp/irq.h"
 #include "model3recomp/scsi.h"
+#include "model3recomp/pci.h"
 #include "model3recomp/model3recomp.h"
 
 #include <stdio.h>
@@ -55,6 +56,17 @@ static uint8_t *g_vram;
 #define POLY_SIZE    0x400000u
 static uint8_t *g_cull_lo, *g_cull_hi, *g_poly;
 
+/* The Real3D's texture/command port at 0x9C000000. The game feeds it by DMA
+ * every frame -- the SCRIPTS program at RAM 0x001A2C4C moves a buffer there --
+ * and discarding those writes throws away the scene. Backed so the data can be
+ * captured and, eventually, drawn.
+ *
+ * Texture RAM on this board is 2048x2048 16-bit; the port is a FIFO into it,
+ * so a linear buffer is the honest shape until the renderer needs better. */
+#define TEXPORT_SIZE 0x800000u
+static uint8_t *g_texport;
+static uint32_t g_texport_pos;
+
 void bus_init(const m3_roms_t *roms)
 {
     g_roms = *roms;
@@ -64,7 +76,9 @@ void bus_init(const m3_roms_t *roms)
     g_cull_lo = calloc(1, CULL_LO_SIZE);
     g_cull_hi = calloc(1, CULL_HI_SIZE);
     g_poly    = calloc(1, POLY_SIZE);
-    if (!g_ram || !g_backup || !g_vram || !g_cull_lo || !g_cull_hi || !g_poly) {
+    g_texport = calloc(1, TEXPORT_SIZE);
+    if (!g_ram || !g_backup || !g_vram || !g_cull_lo || !g_cull_hi || !g_poly ||
+        !g_texport) {
         fprintf(stderr, "[model3recomp] out of memory allocating the board\n");
         abort();
     }
@@ -73,13 +87,16 @@ void bus_init(const m3_roms_t *roms)
     g_io_ctrl = 0;
     g_io_ready = 0;
     scsi_init();
+    pci_init();
 }
 
 void bus_shutdown(void)
 {
     free(g_ram); free(g_backup); free(g_vram);
-    free(g_cull_lo); free(g_cull_hi); free(g_poly);
+    free(g_cull_lo); free(g_cull_hi); free(g_poly); free(g_texport);
     g_ram = g_backup = g_vram = g_cull_lo = g_cull_hi = g_poly = NULL;
+    g_texport = NULL;
+    g_texport_pos = 0;
     m3_ram_base = NULL;
 }
 
@@ -107,6 +124,12 @@ uint8_t *bus_poly(size_t *size)
 {
     if (size) *size = POLY_SIZE;
     return g_poly;
+}
+
+uint8_t *bus_texport(size_t *size)
+{
+    if (size) *size = TEXPORT_SIZE;
+    return g_texport;
 }
 
 const uint8_t *bus_vrom(size_t *size)
@@ -150,6 +173,15 @@ static uint8_t *direct(uint32_t a, uint32_t size, int write)
         return g_cull_hi + (a - M3_R3D_CULL_HI);
     if (a >= M3_R3D_POLY && a < M3_R3D_POLY + POLY_SIZE)
         return g_poly + (a - M3_R3D_POLY);
+
+    /* The texture/command port is a FIFO: every access lands at the write
+     * cursor rather than at an address. Give DMA a linear window so a block
+     * move fills it in order. */
+    if (a >= M3_R3D_TEXPORT && a < M3_R3D_TEXPORT + TEXPORT_SIZE) {
+        uint32_t off = a - M3_R3D_TEXPORT;
+        if (off > g_texport_pos) g_texport_pos = off;
+        return g_texport + off;
+    }
 
     if (a >= M3_TILEGEN_VRAM && a < M3_TILEGEN_VRAM + TILEGEN_VRAM_SIZE)
         return g_vram + (a - M3_TILEGEN_VRAM);
@@ -379,6 +411,13 @@ static uint32_t dev_read(uint32_t a, unsigned size)
         io_log('R', a, size, sv);
         return sv;
     }
+    /* PCI config ports. Byte-addressed and little-endian like the rest of the
+     * PCI side, so they bypass the big-endian word path below. */
+    if (a == M3_PCI_CONFIG_DATA) {
+        uint32_t pv = pci_config_data_read();
+        io_log('R', a, size, pv);
+        return pv;
+    }
     if (size == 4) {
         word = dev_read_word(a & ~3u, 1);
         io_log('R', a, size, word);
@@ -399,6 +438,8 @@ static void dev_write(uint32_t a, uint32_t v, unsigned size)
     spin_note(a, 1);
     io_log('W', a, size, v);
     if ((a & 0xFE000000u) == M3_SCSI_BASE) { scsi_write(a, v, size); return; }
+    if (a == M3_PCI_CONFIG_ADDR) { pci_config_address_write(v); return; }
+    if (a == M3_PCI_CONFIG_DATA) { pci_config_data_write(v); return; }
     if (size == 4) { dev_write_word(w, v); return; }
     /* Read-modify-write without side effects: a byte store must not be able
      * to advance a field by accidentally reading the status register. */

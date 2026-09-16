@@ -88,7 +88,8 @@ Honest status. "Done" means it does what the reference title needs so far.
 | I/O board handshake | **Partial** | Strobe latch is right; the serial ready line is toggled, not driven |
 | 53C810 SCSI DMA | **Partial** | SCRIPTS memory move / jump / interrupt, manual-start mode |
 | Tilemap renderer | **Partial** | Draws real pixels from the game's own VRAM; scroll and priority not wired |
-| Real3D | **Not implemented** | The guest fills the culling tree with matrices every field; nothing draws it |
+| PCI configuration | **Done** | The game finds the 53C810 at device 14 and assigns its base address |
+| Real3D | **Not implemented** | Viewport and LOD table are set up by the guest; no scene is submitted yet |
 | Sound | **Not implemented** | No 68000, no SCSP, no audio |
 | Inputs | **Stub** | Reads as "nothing pressed" |
 | Security board | **Not implemented** | Step 2.x only; the reference title does not use it |
