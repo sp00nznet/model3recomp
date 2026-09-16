@@ -21,6 +21,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Spin diagnosis in the bus: when the guest stops making progress it names the
   register being polled, ranked by traffic.
 - `M3_TRACE_CALLS` to print dispatched guest addresses.
+- `M3_TRACE_IO` records device accesses in the same format the interpreter's
+  `--trace-io` writes, so the two can be diffed line for line.
+- ROM loader assembles the banked CROM and the VROM, not just the program
+  image. A port without them boots and then has nothing to show, because every
+  read of either returns zero.
+- Accessors for tilemap VRAM, Real3D culling and polygon RAM, and the VROM.
+- Inline fast path for guest memory: work RAM is handled in `lift.h` instead of
+  calling into the bus for every load and store.
 
 ### Fixed
 - **Interrupts are delivered on a timer, not on a status poll.** The frame was

@@ -70,6 +70,10 @@ void     bus_write64(uint32_t addr, uint64_t v);
 /* Direct RAM window, for DMA engines and the debugger. Bounds-checked. */
 uint8_t *bus_ram(void);
 
+/* The work-RAM base, for the inline fast path in lift.h. Valid between
+ * bus_init() and bus_shutdown(); NULL outside that. */
+extern uint8_t *m3_ram_base;
+
 /* Tilemap VRAM: 1 MB of pattern and name data followed by 128 KB of palette,
  * addressed by the guest as one block at 0xF1000000. */
 uint8_t *bus_vram(size_t *size);
@@ -79,6 +83,11 @@ uint8_t *bus_vram(size_t *size);
 uint8_t *bus_cull_lo(size_t *size);
 uint8_t *bus_cull_hi(size_t *size);
 uint8_t *bus_poly(size_t *size);
+
+/* The VROM holds the Real3D's models and textures. It is deliberately not in
+ * the CPU's address map -- on hardware only the graphics processor reads it --
+ * so the renderer gets at it through here. */
+const uint8_t *bus_vrom(size_t *size);
 void     bus_dma_copy(uint32_t dst, uint32_t src, uint32_t len);
 
 #ifdef __cplusplus

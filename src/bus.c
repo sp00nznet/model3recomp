@@ -19,6 +19,7 @@
 #include <string.h>
 
 static uint8_t  *g_ram;
+uint8_t *m3_ram_base;           /* mirrors g_ram, for lift.h's fast path */
 static m3_roms_t g_roms;
 static uint8_t  *g_backup;          /* 128 KB battery-backed SRAM */
 static uint32_t  g_crom_bank;       /* which 8 MB of CROM0..3 is at 0xFF000000 */
@@ -67,6 +68,7 @@ void bus_init(const m3_roms_t *roms)
         fprintf(stderr, "[model3recomp] out of memory allocating the board\n");
         abort();
     }
+    m3_ram_base = g_ram;
     g_crom_bank = 0;
     g_io_ctrl = 0;
     g_io_ready = 0;
@@ -78,6 +80,7 @@ void bus_shutdown(void)
     free(g_ram); free(g_backup); free(g_vram);
     free(g_cull_lo); free(g_cull_hi); free(g_poly);
     g_ram = g_backup = g_vram = g_cull_lo = g_cull_hi = g_poly = NULL;
+    m3_ram_base = NULL;
 }
 
 uint8_t *bus_ram(void) { return g_ram; }
@@ -104,6 +107,12 @@ uint8_t *bus_poly(size_t *size)
 {
     if (size) *size = POLY_SIZE;
     return g_poly;
+}
+
+const uint8_t *bus_vrom(size_t *size)
+{
+    if (size) *size = g_roms.vrom_size;
+    return g_roms.vrom;
 }
 
 /* ---- big-endian accessors over a host buffer --------------------------- */

@@ -13,14 +13,73 @@
 #include "model3recomp/bus.h"
 #include "model3recomp/func_table.h"
 
-/* Memory */
-#define MEM_R8(a)     bus_read8 ((uint32_t)(a))
-#define MEM_R16(a)    bus_read16((uint32_t)(a))
-#define MEM_R32(a)    bus_read32((uint32_t)(a))
+/* ---- Memory -------------------------------------------------------------
+ * Nearly every guest access is plain work RAM, so it is handled inline here
+ * rather than as a call into the bus with a chain of range checks. The bus is
+ * still the single place devices are decoded -- this only short-circuits the
+ * common case, and the byte order matches what bus.c stores (big-endian, as
+ * the guest sees it).
+ */
+static inline uint32_t m3_ld32(uint32_t a)
+{
+    if (a < M3_RAM_SIZE - 3u) {
+        const uint8_t *p = m3_ram_base + a;
+        return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+               ((uint32_t)p[2] << 8) | p[3];
+    }
+    return bus_read32(a);
+}
+
+static inline uint32_t m3_ld16(uint32_t a)
+{
+    if (a < M3_RAM_SIZE - 1u) {
+        const uint8_t *p = m3_ram_base + a;
+        return ((uint32_t)p[0] << 8) | p[1];
+    }
+    return bus_read16(a);
+}
+
+static inline uint32_t m3_ld8(uint32_t a)
+{
+    if (a < M3_RAM_SIZE)
+        return m3_ram_base[a];
+    return bus_read8(a);
+}
+
+static inline void m3_st32(uint32_t a, uint32_t v)
+{
+    if (a < M3_RAM_SIZE - 3u) {
+        uint8_t *p = m3_ram_base + a;
+        p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16);
+        p[2] = (uint8_t)(v >> 8);  p[3] = (uint8_t)v;
+        return;
+    }
+    bus_write32(a, v);
+}
+
+static inline void m3_st16(uint32_t a, uint32_t v)
+{
+    if (a < M3_RAM_SIZE - 1u) {
+        uint8_t *p = m3_ram_base + a;
+        p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v;
+        return;
+    }
+    bus_write16(a, (uint16_t)v);
+}
+
+static inline void m3_st8(uint32_t a, uint32_t v)
+{
+    if (a < M3_RAM_SIZE) { m3_ram_base[a] = (uint8_t)v; return; }
+    bus_write8(a, (uint8_t)v);
+}
+
+#define MEM_R8(a)     m3_ld8 ((uint32_t)(a))
+#define MEM_R16(a)    m3_ld16((uint32_t)(a))
+#define MEM_R32(a)    m3_ld32((uint32_t)(a))
 #define MEM_R64(a)    bus_read64((uint32_t)(a))
-#define MEM_W8(a,v)   bus_write8 ((uint32_t)(a),(uint8_t)(v))
-#define MEM_W16(a,v)  bus_write16((uint32_t)(a),(uint16_t)(v))
-#define MEM_W32(a,v)  bus_write32((uint32_t)(a),(uint32_t)(v))
+#define MEM_W8(a,v)   m3_st8 ((uint32_t)(a),(uint32_t)(v))
+#define MEM_W16(a,v)  m3_st16((uint32_t)(a),(uint32_t)(v))
+#define MEM_W32(a,v)  m3_st32((uint32_t)(a),(uint32_t)(v))
 #define MEM_W64(a,v)  bus_write64((uint32_t)(a),(uint64_t)(v))
 
 /* Condition / flag updates */
