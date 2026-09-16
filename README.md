@@ -88,7 +88,7 @@ Honest status. "Done" means it does what the reference title needs so far.
 | I/O board handshake | **Partial** | Strobe latch is right; the serial ready line is toggled, not driven |
 | 53C810 SCSI DMA | **Partial** | SCRIPTS memory move / jump / interrupt, manual-start mode |
 | Tilemap renderer | **Partial** | Draws real pixels from the game's own VRAM; scroll and priority not wired |
-| Real3D | **Not implemented** | Culling and polygon RAM are stored; no geometry or rasterizer |
+| Real3D | **Not implemented** | The guest fills the culling tree with matrices every field; nothing draws it |
 | Sound | **Not implemented** | No 68000, no SCSP, no audio |
 | Inputs | **Stub** | Reads as "nothing pressed" |
 | Security board | **Not implemented** | Step 2.x only; the reference title does not use it |

@@ -352,3 +352,66 @@ code lives in the gaps:
 `(opcode, offset, value)` triples, writing bytes, halfwords and words to
 registers relative to that base. It is not code you need to understand — it is
 code you need to *run*, which the boot interpreter does.
+
+
+## The clock, and why lifted code has to carry it
+
+A recompiled program has no instruction counter. Nothing counts cycles, and
+there is no interpreter loop to hang a timer on -- so the runtime's only idea
+of how much the guest has done is what the guest tells it.
+
+The runtime gets control in exactly three places: a dispatched call
+(`func_table_call`), a device access (the bus), and whatever lifted code
+explicitly hands it. The first two are not enough, and the reason is worth
+stating plainly because it cost a long time to find:
+
+* A main loop that waits on an interrupt-set flag does dispatch through a
+  pointer each iteration, so `func_table_call` catches it.
+* A loop that polls a hardware register reaches the bus.
+* **A loop that only touches work RAM reaches neither** -- especially once
+  work RAM is resolved inline for speed.
+
+In that third case the field never arrives, and the guest waits forever for an
+interrupt that only a field could deliver. It presents as a hang with no
+evidence at all: full CPU, no func-table miss, no device traffic, and no
+watchdog firing, because every instrument lives in the runtime the guest has
+stopped visiting. The silence *is* the diagnosis.
+
+So lifted basic blocks retire their instructions through `WORK(n)`:
+
+```c
+#define WORK(n)                                                    do {                                                               m3_work += (n);                                                if (m3_work >= m3_next_tick) m3_tick();                    } while (0)
+```
+
+an inline add, a compare that is almost always false, and a call about once
+per 64 K instructions. `m3_work` is then a real instruction count, and the
+headless platform divides it by the 66 MHz bus clock, so a field lands every
+1,147,413 instructions -- 66 MHz / 57.52 Hz, which is what a field is.
+
+Two ways to get the counting itself wrong, both hit here:
+
+| Counted | Symptom |
+|---|---|
+| per function entry | a loop inside one function advances the clock once; fields stop dead |
+| off device traffic | a compute-heavy frame barely advances; 900 fields took over half an hour |
+
+## What the guest actually builds
+
+With all of the above right, *The Lost World* runs to 300 fields and fills:
+
+| Buffer | Non-zero words |
+|---|---|
+| tilegen VRAM | 24,525 |
+| Real3D culling RAM (high) | 8,306 |
+| Real3D culling RAM (low) | 0 |
+| polygon RAM | 0 |
+
+and the interpreter agrees exactly. The culling RAM holds the scene: recurring
+`0000803F` words are `3F800000` byte-reversed -- 1.0f -- so those are
+transformation matrices, stored little-endian like everything else on the PCI
+side of this board. Polygon RAM staying empty is consistent with the geometry
+living in VROM and being referenced through the culling tree rather than built
+per frame.
+
+The game therefore describes a complete 3D scene every field. What is missing
+is something to draw it.
