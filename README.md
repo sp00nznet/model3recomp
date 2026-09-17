@@ -33,11 +33,44 @@ is being built against, so the worked examples are its.
 verified end to end on a ROM; the board is a skeleton.**
 
 What that means concretely: you can take a Lost World romset, assemble it,
-recompile 342,753 PowerPC instructions to C, and compile the result cleanly.
-You cannot yet see a picture, because no renderer is written.
+recompile 342,753 PowerPC instructions to C, compile the result cleanly, and
+**run it**. The game boots, passes its own memory test, enumerates PCI,
+configures the SCSI DMA engine itself, drives the tilemap generator and fills
+culling RAM. It reaches its operator service menu and holds there.
 
-No screenshots yet — the project does not draw anything. There will be
-screenshots here the moment it does, and not before.
+It does not reach attract mode yet, and there is no renderer, so there is no
+picture to show. No screenshots here until there is one.
+
+The strongest evidence the lift is correct is not that it runs — it is that
+the interpreter and the recompiled binary **agree**. Over 30,000 ordered
+device accesses the two traces are identical, and both produce byte-identical
+buffers: 24,525 words of VRAM and 8,306 words of culling RAM. A lifter bug
+would show up as the first differing line.
+
+### What is blocking attract mode
+
+The game installs its per-frame tasks through a table of ten callback slots at
+RAM `0x001EED7C..0x001EEDA0`. In a run that reaches attract mode, slot
+`0x001EED80` holds the frame task `0x1578`. Here it holds the null stub
+`0x00117864` for every field observed — the installer at `0x00117C44` is never
+called with it.
+
+The install site is `0x000019A8`, reached from `0x00001934` when
+`[0x001A3474] == 0`. Both of those facts are observed to hold: execution
+provably reaches `0x000018FC` (it writes `0x001A3474`), and the byte reads back
+0. So the stall is in the span between them — three calls: `0x0002E9BC`, the
+epilogue of `0x000018BC`, and `0x00001984`. `tools/ppc_interp.py --break-at`
+exists to say which of those is the last one reached; that run is the next
+step.
+
+Ruled out by measurement, not by argument: the sound board (non-blocking —
+forcing data-ready changes nothing), PCI enumeration, the SCSI engine, the
+Real3D ready bit, both polarities of the input registers at `0xF0040008` and
+`0xF004000C` (byte-identical results), and the two interrupt lines the guest
+enables but this runtime never asserts, `0x20000000` and `0x08000000`
+(asserting them produced 212,812 handler entries against a normal 482, which
+is what an unacknowledged level-triggered line looks like — the guest is not
+waiting for them).
 
 ## What Is This?
 
@@ -209,6 +242,26 @@ Bounding a lifted function at the next *discovered* entry cut it off after five
 of them. Only a `bl` target or a stack-frame prologue starts a function; a
 jump-table arm or an address built by `lis`/`addi` is an extra way *into* code
 that already belongs to one.
+
+### The input register is multiplexed, and that is what picks the menu
+
+`0xF0040004` returns different things depending on what was last written to
+`0xF0040000`, and two callers want two different things from it. The input path
+at RAM `0x00117890` strobes with the clock bit *low* and wants button state;
+the serial path at `0x0011A650` bit-bangs a byte through the primitive at
+`0x0011A338`, which leaves the clock bit *high*, and wants the I/O board's
+reply. Serving either one unconditionally breaks the other: the reply line
+returned to the input path reads as a phantom button press, and button state
+returned to the serial path hangs a handshake that waits for the line to
+change.
+
+The clock bit tells them apart. Worth recording because the failure is silent
+in both directions — one puts the game in a menu, the other stops it dead, and
+neither logs anything.
+
+Inputs are active low. `nor r0, r0, r11` in the input path means `0xF000` is
+the correct idle value, not a stuck bus — a thing this project got wrong once
+and had to correct.
 
 ## Getting Started
 

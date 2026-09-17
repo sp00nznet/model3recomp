@@ -7,6 +7,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `tools/ppc_interp.py --break-at ADDR`: reports the first time the program
+  counter reaches an address, with the instruction count. Added to find which
+  call in the frame-task install chain at RAM `0x1934` is the last one reached.
+- README now records what is blocking attract mode, what has been ruled out by
+  measurement, and the input-register multiplexing that decides between the
+  game's attract path and its operator service menu.
 - **Boot interpreter** (`tools/ppc_interp.py`): runs the reset path against the
   same memory map as the runtime, recovers the CROM-to-RAM segment table, and
   snapshots RAM for the lifter. Also the conformance oracle.
