@@ -14,11 +14,12 @@ under the licences below; each file keeps its own notice.
 
 ## Supermodel
 
-Versions of this library up to and including commit `644803a` contained
+Versions of this library published before October 5, 2026 contained
 code derived from [Supermodel](https://github.com/trzy/Supermodel), which is
 GPL-licensed, without saying so -- the renderer's texture and texel
 decoding, node walk, frustum, fog, specular and mipmap handling, the tilemap
 line drawing, the 93C46 EEPROM and the light gun reload and calibration.
 That was wrong, and it has been removed: every one of those parts was
 rewritten from MAME (BSD-3-Clause) or from measurements of the game, and
-no code from Supermodel remains. See the changelog.
+no code from Supermodel remains. The repository's history was then squashed
+so that it no longer carries the old code. See the changelog.
