@@ -1,0 +1,40 @@
+# --- Never commit regenerated code (repo_rules.md S3) ---
+# The tool ships; the output never does. Lifted C source from a game ROM
+# lands here and stays out of the repo, permanently.
+/recompiled/
+/lifted/
+*.lifted.c
+*.lifted.h
+funcs_*.c
+func_table_gen.c
+
+# --- ROMs, dumps, assets ---
+*.zip
+*.bin
+*.rom
+*.eeprom
+*.nv
+epr-*
+mpr-*
+
+# --- Build ---
+build/
+out/
+cmake-build-*/
+*.o
+*.a
+*.obj
+*.exe
+*.pdb
+*.ilk
+CMakeCache.txt
+CMakeFiles/
+
+# --- Local tooling (repo_rules.md S2, also in global gitignore) ---
+CLAUDE.md
+.claude/
+repo_rules.md
+
+# Python
+__pycache__/
+*.pyc
