@@ -7,6 +7,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Boss health bars and the carnotaurus's head.** Depth ties now go to the
+  later polygon, as in MAME's renderer: a boss's health is drawn over its
+  red bar at the same depth, and only rounding specks of it showed. And a
+  translucent pixel at least half opaque writes depth, as the hardware's
+  stippled translucency does: the carnotaurus's head is 31/32 opaque, and
+  its inside was painted over its face.
 - **Switch tables inside switch arms were never lifted.** The lifter's
   jump-table scan ran once over the code reachable from the seeds and
   prologues; an arm leading into a function with a switch of its own, and

@@ -1364,7 +1364,10 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
                 if (l0 < 0 || l1 < 0 || l2 < 0) continue;
                 z = l0*p[0][2] + l1*p[1][2] + l2*p[2][2];
                 o = y * fw + x;
-                if (z < g_zbuf[o]) {
+                /* Ties go to the later polygon, as in MAME's renderer: a
+                 * HUD draws a boss's health over its red bar at the same
+                 * depth, and first-wins left only rounding specks of it. */
+                if (z <= g_zbuf[o]) {
                     uint32_t c = argb;
                     unsigned pa = tr->alpha;    /* this pixel's opacity */
                     if (tr->textured) {
@@ -1483,6 +1486,13 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
                             m |= ((((c >> sh2) & 0xFFu) * a
                                   + ((d0 >> sh2) & 0xFFu) * (255u - a)) / 255u) << sh2;
                         fb[o] = 0xFF000000u | m;
+                        /* The hardware draws translucency as a stipple
+                         * pattern (MAME's "translucency pattern select"),
+                         * so what it draws writes depth. A pixel at least
+                         * half opaque does here too: the carnotaurus's head
+                         * is 31/32 opaque, and without depth its inside
+                         * was painted over its face. */
+                        if (a >= 128u) g_zbuf[o] = (float)z;
                     } else {
                         g_zbuf[o] = (float)z; fb[o] = c;
                     }
