@@ -87,6 +87,10 @@ static void settings_load(void)
             snprintf(opt.net_join, sizeof opt.net_join, "%s", eq);
         if (!strcmp(line, "game_options"))
             m3_options_set_local_all((uint32_t)strtoul(eq, NULL, 0));
+        /* Kept across the restart an option change makes; a scripted run
+         * (M3_CHEATS) sets its own. */
+        if (!strcmp(line, "cheats") && !getenv("M3_CHEATS"))
+            m3_cheats_set_local((uint32_t)strtoul(eq, NULL, 0));
     }
     fclose(f);
     if (opt.scale < 1 || opt.scale > 4) opt.scale = 2;
@@ -104,6 +108,7 @@ static void settings_save(void)
         fprintf(f, "%s=%d\n", k_int[i].key, *k_int[i].v);
     fprintf(f, "net_join=%s\n", opt.net_join);
     fprintf(f, "game_options=0x%08X\n", (unsigned)m3_options_local_all());
+    fprintf(f, "cheats=0x%08X\n", (unsigned)m3_cheats_local());
     fclose(f);
 }
 

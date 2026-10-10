@@ -20,6 +20,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   times polygon alpha. Shadows and glows show.
 - The crosshair is the default cursor; a hidden pointer left players
   guessing what they were shooting at.
+- **Cheats were lost on every option change.** An option restarts the
+  game as a new process, and cheats lived only in memory; they are now kept
+  in the ini as `cheats=` (a scripted `M3_CHEATS` still overrides). The
+  menu is also built again once the game has registered its cheats and
+  options -- it said the game had none until something else was clicked.
 
 ### Removed
 - **All code derived from Supermodel** (GPL), which earlier commits carried
