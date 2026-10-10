@@ -6,6 +6,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Switch tables inside switch arms were never lifted.** The lifter's
+  jump-table scan ran once over the code reachable from the seeds and
+  prologues; an arm leading into a function with a switch of its own, and
+  code reached only as a `bl` target, were never scanned. It now walks the
+  `bl` targets and repeats the scan until nothing new turns up. In The Lost
+  World that is the zip line -- a five-arm table at 0x00044C14 whose arms
+  were runtime misses, so the stage stopped -- and about 70 other arms.
+- **Texel alpha blends.** A polygon with a translucency mode (word 6) was
+  only cut out where its texels were under half alpha and drawn solid
+  elsewhere; it now goes in the translucent pass and blends by texel alpha
+  times polygon alpha. Shadows and glows show.
+- The crosshair is the default cursor; a hidden pointer left players
+  guessing what they were shooting at.
+
 ### Removed
 - **All code derived from Supermodel** (GPL), which earlier commits carried
   without saying so -- reported in issue #1. Each part was rewritten from
@@ -71,7 +86,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   Sound (a placeholder until there is sound), Controls (mouse, gamepad,
   cursor, Sinden border), Debug (the game's cheats) and Multiplayer (host,
   join, disconnect, input delay). Settings persist in an ini file.
-- **Cursor options.** Hidden by default, as on the cabinet; a crosshair or
+- **Cursor options.** A crosshair by default; hidden, as on the cabinet, or
   the system pointer if wanted. Gamepads and netplay partners always get a
   crosshair, having nothing else to aim by.
 - **Gamepads**, as player 1 or 2: the left stick aims, A or the right

@@ -888,6 +888,15 @@ def discover(image, base, seeds, scan_pointers=False, scan_consts=True,
         seen |= scan_reachable(image, base, pro)[1]
 
     if scan_tables:
+        # Every bl target is a way into code too, and the table scan only
+        # looks at code `seen` reaches -- so walk them first.
+        seen |= scan_reachable(image, base, entries - seen)[1]
+    # Repeated until nothing new turns up: a switch arm can lead into code
+    # with a switch of its own, and the first pass never sees that code.
+    # The Lost World's zip line runs through such a switch, at
+    # 0x00044C14, and missing it stopped the game at the zip line.
+    while scan_tables:
+        before = set(entries)
         # Switch statements compile to a jump table reached through bctr:
         #
         #     lis   rY, hi ; addi rY, rY, lo      ; table base
@@ -956,6 +965,10 @@ def discover(image, base, seeds, scan_pointers=False, scan_consts=True,
                 tbl_ptr.clear()
                 loaded.clear()
                 off_tbl.clear()
+        found = entries - before
+        if not found:
+            break
+        seen |= scan_reachable(image, base, found)[1]
 
     if scan_consts:
         # lis rX,hi ; addi/ori rX,rX,lo -- how PowerPC code materialises a

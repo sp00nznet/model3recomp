@@ -53,7 +53,7 @@ static struct {
     char net_join[128]; /* last address joined */
     int volume;         /* percent */
     int mute;
-} opt = { 2, 0, 0, 0, 1, CUR_HIDDEN, 1, 2, 0, 1, 3, 7777, "", 100, 0 };
+} opt = { 2, 0, 0, 0, 1, CUR_CROSSHAIR, 1, 2, 0, 1, 3, 7777, "", 100, 0 };
 
 static const struct { const char *key; int *v; } k_int[] = {
     { "scale", &opt.scale }, { "fullscreen", &opt.fullscreen },

@@ -1197,7 +1197,9 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
     }
 
     /* Opaque first, then the translucent ones over them in submission
-     * order, blended and leaving the depth buffer alone. */
+     * order, blended and leaving the depth buffer alone. A polygon whose
+     * texels carry alpha (word 6's translucency mode) counts as
+     * translucent: smoke, glass and shadows are made of those. */
     for (t = 0; t < 2u * g_ntris; t++) {
         const tri_t *tr = &g_tris[t % g_ntris];
         /* Screen-space vertices in double. A projected triangle here can
@@ -1211,7 +1213,7 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
         float clipped[4][5], src[3][5];
         double d, invd;
         float lit, sh;
-        if ((tr->alpha < 255) != (t >= g_ntris)) continue;
+        if ((tr->alpha < 255 || (tr->textured && tr->tex_alpha)) != (t >= g_ntris)) continue;
         int nclip, fan;
         int x0, x1, y0, y1, x, y, k;
         int r, g, b;
@@ -1364,6 +1366,7 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
                 o = y * fw + x;
                 if (z < g_zbuf[o]) {
                     uint32_t c = argb;
+                    unsigned pa = tr->alpha;    /* this pixel's opacity */
                     if (tr->textured) {
                         double iz = l0*q[0][2] + l1*q[1][2] + l2*q[2][2];
                         if (iz > 1e-12) {
@@ -1386,8 +1389,14 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
                                 /* Format 0's transparent bit has always
                                  * been honoured here; the others only
                                  * when the polygon asks for it. */
-                                if ((tr->fmt == 0 || tr->alpha_test || tr->tex_alpha)
-                                    && (t >> 24) < 128u) { g_texel_clear++; continue; }
+                                if ((tr->fmt == 0 || tr->alpha_test) && (t >> 24) < 128u)
+                                    { g_texel_clear++; continue; }
+                                /* Texel alpha blends; next to nothing is
+                                 * dropped rather than blended. */
+                                if (tr->tex_alpha) {
+                                    if ((t >> 24) < 8u) { g_texel_clear++; continue; }
+                                    pa = pa * (t >> 24) / 255u;
+                                }
                                 /* Modulated by the polygon colour: that is
                                  * what tints the greyscale formats. */
                                 c = 0xFF000000u
@@ -1467,8 +1476,8 @@ static void raster(uint32_t *fb, int fw, int fh, float sx, float sy,
                             c = m;
                         }
                     }
-                    if (tr->alpha < 255) {
-                        uint32_t a = tr->alpha, d0 = fb[o], m = 0;
+                    if (pa < 255) {
+                        uint32_t a = pa, d0 = fb[o], m = 0;
                         int sh2;
                         for (sh2 = 0; sh2 < 24; sh2 += 8)
                             m |= ((((c >> sh2) & 0xFFu) * a
