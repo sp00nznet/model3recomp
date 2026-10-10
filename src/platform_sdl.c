@@ -526,6 +526,12 @@ int platform_poll(void)
 {
     SDL_Event e;
     int changed = 0;
+#ifdef _WIN32
+    /* The menu is first built in platform_init(), before the game has
+     * registered its cheats and options, so build it again once they are. */
+    static int rebuilt;
+    if (!rebuilt) { rebuilt = 1; build_menu(); }
+#endif
     while (SDL_PollEvent(&e)) {
         switch (e.type) {
         case SDL_QUIT:
