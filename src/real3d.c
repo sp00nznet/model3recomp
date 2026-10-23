@@ -519,6 +519,7 @@ static unsigned wrap_axis(long i, unsigned size, int mirror)
 /* Bilinear. Each texel's colour is first taken from whichever neighbour is
  * more opaque, so a cut-out's transparent texels do not bleed dark into its
  * edge. Returns -1 when the texture was never uploaded. */
+struct tri_s;
 static int64_t sample(const struct tri_s *tr, double u, double v, double lod);
 
 /* ---- the triangle queue ------------------------------------------------ */
