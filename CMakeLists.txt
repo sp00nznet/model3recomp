@@ -28,7 +28,11 @@ set(M3_SOURCES
     src/m68k/m68kops.c
     src/m68k/softfloat/softfloat.c
 )
-if(SDL2_FOUND)
+if(EMSCRIPTEN)
+    # The browser: the guest on a pthread, frames and audio published in
+    # shared memory for the page to draw and play. See src/platform_web.c.
+    list(APPEND M3_SOURCES src/platform_web.c)
+elseif(SDL2_FOUND)
     list(APPEND M3_SOURCES src/platform_sdl.c)
 else()
     # Headless build: the library is still fully usable for the boot harness
@@ -43,7 +47,10 @@ target_include_directories(model3recomp
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-if(SDL2_FOUND)
+if(EMSCRIPTEN)
+    target_compile_options(model3recomp PUBLIC -pthread)
+    target_link_options(model3recomp PUBLIC -pthread)
+elseif(SDL2_FOUND)
     target_link_libraries(model3recomp PUBLIC SDL2::SDL2)
 else()
     message(STATUS "SDL2 not found -- building headless (src/platform_null.c)")
